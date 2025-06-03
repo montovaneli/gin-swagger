@@ -3,11 +3,11 @@ package main
 import (
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
-	"github.com/swaggo/gin-swagger"
+	"github.com/montovaneli/gin-swagger"
 
-	"github.com/swaggo/gin-swagger/example/basic/api"
+	"github.com/montovaneli/gin-swagger/example/basic/api"
 
-	_ "github.com/swaggo/gin-swagger/example/basic/docs"
+	_ "github.com/montovaneli/gin-swagger/example/basic/docs"
 )
 
 // @title Swagger Example API
