@@ -27,6 +27,8 @@ type swaggerConfig struct {
 	IsDarkMode               bool
 	CustomLogo               string
 	LogoAspectRatio          string
+	CustomFavicon16          string
+	CustomFavicon32          string
 }
 
 // Config stores ginSwagger configuration variables.
@@ -43,6 +45,8 @@ type Config struct {
 	IsDarkMode               bool
 	CustomLogo               string
 	LogoAspectRatio          string
+	CustomFavicon16          string
+	CustomFavicon32          string
 }
 
 func (config Config) toSwaggerConfig() swaggerConfig {
@@ -65,6 +69,8 @@ func (config Config) toSwaggerConfig() swaggerConfig {
 		IsDarkMode:            config.IsDarkMode,
 		CustomLogo:            config.CustomLogo,
 		LogoAspectRatio:       aspectRatio,
+		CustomFavicon16:       config.CustomFavicon16,
+		CustomFavicon32:       config.CustomFavicon32,
 	}
 }
 
@@ -86,6 +92,20 @@ func CustomLogo(logoBase64 string) func(*Config) {
 func LogoAspectRatio(ratio string) func(*Config) {
 	return func(c *Config) {
 		c.LogoAspectRatio = ratio
+	}
+}
+
+// CustomFavicon16 sets a custom 16x16 favicon using base64 encoded image string or URL.
+func CustomFavicon16(favicon string) func(*Config) {
+	return func(c *Config) {
+		c.CustomFavicon16 = favicon
+	}
+}
+
+// CustomFavicon32 sets a custom 32x32 favicon using base64 encoded image string or URL.
+func CustomFavicon32(favicon string) func(*Config) {
+	return func(c *Config) {
+		c.CustomFavicon32 = favicon
 	}
 }
 
@@ -155,6 +175,8 @@ func WrapHandler(handler *webdav.Handler, options ...func(*Config)) gin.HandlerF
 		IsDarkMode:               false,
 		CustomLogo:               "",
 		LogoAspectRatio:          "",
+		CustomFavicon16:          "",
+		CustomFavicon32:          "",
 	}
 
 	for _, c := range options {
@@ -1334,8 +1356,8 @@ const swaggerIndexTpl = `<!-- HTML for static distribution bundle build -->
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" type="text/css" href="./swagger-ui.css" >
-  <link rel="icon" type="image/png" href="./favicon-32x32.png" sizes="32x32" />
-  <link rel="icon" type="image/png" href="./favicon-16x16.png" sizes="16x16" />
+  {{if .CustomFavicon32}}<link rel="icon" type="image/png" href="{{.CustomFavicon32}}" sizes="32x32" />{{else}}<link rel="icon" type="image/png" href="./favicon-32x32.png" sizes="32x32" />{{end}}
+  {{if .CustomFavicon16}}<link rel="icon" type="image/png" href="{{.CustomFavicon16}}" sizes="16x16" />{{else}}<link rel="icon" type="image/png" href="./favicon-16x16.png" sizes="16x16" />{{end}}
   <link rel="stylesheet" type="text/css" href="index.css" />
 </head>
 
