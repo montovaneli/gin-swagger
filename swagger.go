@@ -25,6 +25,8 @@ type swaggerConfig struct {
 	PersistAuthorization     bool
 	Oauth2DefaultClientID    string
 	IsDarkMode               bool
+	CustomLogo               string
+	LogoAspectRatio          string
 }
 
 // Config stores ginSwagger configuration variables.
@@ -39,9 +41,16 @@ type Config struct {
 	PersistAuthorization     bool
 	Oauth2DefaultClientID    string
 	IsDarkMode               bool
+	CustomLogo               string
+	LogoAspectRatio          string
 }
 
 func (config Config) toSwaggerConfig() swaggerConfig {
+	aspectRatio := config.LogoAspectRatio
+	if aspectRatio == "" {
+		aspectRatio = "1 / 1" // default square
+	}
+
 	return swaggerConfig{
 		URL:                      config.URL,
 		DeepLinking:              config.DeepLinking,
@@ -54,12 +63,29 @@ func (config Config) toSwaggerConfig() swaggerConfig {
 		PersistAuthorization:  config.PersistAuthorization,
 		Oauth2DefaultClientID: config.Oauth2DefaultClientID,
 		IsDarkMode:            config.IsDarkMode,
+		CustomLogo:            config.CustomLogo,
+		LogoAspectRatio:       aspectRatio,
 	}
 }
 
 func SetDarkMode(isDarkMode bool) func(*Config) {
 	return func(c *Config) {
 		c.IsDarkMode = isDarkMode
+	}
+}
+
+// CustomLogo sets a custom logo using base64 encoded image string.
+func CustomLogo(logoBase64 string) func(*Config) {
+	return func(c *Config) {
+		c.CustomLogo = logoBase64
+	}
+}
+
+// LogoAspectRatio sets the aspect ratio for the custom logo (e.g., "16 / 9", "4 / 3", "658 / 141").
+// Default is "1 / 1" (square) if not specified.
+func LogoAspectRatio(ratio string) func(*Config) {
+	return func(c *Config) {
+		c.LogoAspectRatio = ratio
 	}
 }
 
@@ -127,6 +153,8 @@ func WrapHandler(handler *webdav.Handler, options ...func(*Config)) gin.HandlerF
 		PersistAuthorization:     false,
 		Oauth2DefaultClientID:    "",
 		IsDarkMode:               false,
+		CustomLogo:               "",
+		LogoAspectRatio:          "",
 	}
 
 	for _, c := range options {
@@ -260,6 +288,70 @@ html
 body {
   margin:0;
   background: #fafafa;
+  font-family: "Inter", sans-serif !important;
+  font-optical-sizing: auto;
+  font-style: normal;
+}
+
+.swagger-ui {
+  font-family: "Inter", sans-serif !important;
+  font-optical-sizing: auto;
+  font-style: normal;
+}
+
+.swagger-ui * {
+  font-family: "Inter", sans-serif !important;
+}
+
+/* Hide the download URL form */
+.swagger-ui .topbar .download-url-wrapper {
+    display: none !important;
+}
+
+/* Adjust topbar wrapper to center content */
+.swagger-ui .topbar .topbar-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+    padding: 10px 20px;
+}
+
+/* Adjust link container - vertical layout */
+.swagger-ui .topbar .link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Hide default Swagger logo image */
+.swagger-ui .topbar .link img {
+    display: none;
+}
+
+/* Add custom logo */
+.swagger-ui .topbar .link::before {
+    content: "";
+    display: block;
+    height: 35px;
+    width: auto;
+    aspect-ratio: {{.LogoAspectRatio}};
+    background-image: url({{.CustomLogo}});
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+/* Add title below logo */
+.swagger-ui .topbar .link::after {
+    content: "{{.Title}}";
+    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    text-align: center;
 }
 `
 
@@ -306,6 +398,19 @@ body {
         background: #1f1f1f;
         background-color: #1f1f1f;
         background-image: none !important;
+        font-family: "Inter", sans-serif !important;
+        font-optical-sizing: auto;
+        font-style: normal;
+    }
+
+    .swagger-ui {
+        font-family: "Inter", sans-serif !important;
+        font-optical-sizing: auto;
+        font-style: normal;
+    }
+
+    .swagger-ui * {
+        font-family: "Inter", sans-serif !important;
     }
 
     button, input, select, textarea {
@@ -1131,6 +1236,57 @@ body {
             linear-gradient(270deg, #696969 30%, rgba(0, 0, 0, 0) 31%);
         background-color: #b6b6b6;
     }
+
+    /* Hide the download URL form */
+    .swagger-ui .topbar .download-url-wrapper {
+        display: none !important;
+    }
+
+    /* Adjust topbar wrapper to center content */
+    .swagger-ui .topbar .topbar-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        max-width: 100%;
+        padding: 10px 20px;
+    }
+
+    /* Adjust link container - vertical layout */
+    .swagger-ui .topbar .link {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Hide default Swagger logo image */
+    .swagger-ui .topbar .link img {
+        display: none;
+    }
+
+    /* Add custom logo */
+    .swagger-ui .topbar .link::before {
+        content: "";
+        display: block;
+        height: 35px;
+        width: auto;
+        aspect-ratio: {{.LogoAspectRatio}};
+        background-image: url({{.CustomLogo}});
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+    }
+
+    /* Add title below logo */
+    .swagger-ui .topbar .link::after {
+        content: "{{.Title}}";
+        display: block;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #fff;
+        white-space: nowrap;
+        text-align: center;
+    }
 }
 
 `
@@ -1174,6 +1330,9 @@ const swaggerIndexTpl = `<!-- HTML for static distribution bundle build -->
 <head>
   <meta charset="UTF-8">
   <title>{{.Title}}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" type="text/css" href="./swagger-ui.css" >
   <link rel="icon" type="image/png" href="./favicon-32x32.png" sizes="32x32" />
   <link rel="icon" type="image/png" href="./favicon-16x16.png" sizes="16x16" />
