@@ -1315,6 +1315,24 @@ body {
 
 const swaggerJSTpl = `
 window.onload = function() {
+  // Update favicons if custom ones are provided
+  const customFavicon16 = "{{.CustomFavicon16}}";
+  const customFavicon32 = "{{.CustomFavicon32}}";
+  
+  if (customFavicon16) {
+    let link16 = document.querySelector("link[rel*='icon'][sizes='16x16']");
+    if (link16) {
+      link16.href = customFavicon16;
+    }
+  }
+  
+  if (customFavicon32) {
+    let link32 = document.querySelector("link[rel*='icon'][sizes='32x32']");
+    if (link32) {
+      link32.href = customFavicon32;
+    }
+  }
+
   // Build a system
   const ui = SwaggerUIBundle({
     url: "{{.URL}}",
