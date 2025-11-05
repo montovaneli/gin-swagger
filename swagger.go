@@ -27,6 +27,7 @@ type swaggerConfig struct {
 	IsDarkMode               bool
 	CustomLogo               string
 	LogoAspectRatio          string
+	LogoHeight               string
 	CustomFavicon16          string
 	CustomFavicon32          string
 }
@@ -45,6 +46,7 @@ type Config struct {
 	IsDarkMode               bool
 	CustomLogo               string
 	LogoAspectRatio          string
+	LogoHeight               string
 	CustomFavicon16          string
 	CustomFavicon32          string
 }
@@ -53,6 +55,11 @@ func (config Config) toSwaggerConfig() swaggerConfig {
 	aspectRatio := config.LogoAspectRatio
 	if aspectRatio == "" {
 		aspectRatio = "1 / 1" // default square
+	}
+
+	logoHeight := config.LogoHeight
+	if logoHeight == "" {
+		logoHeight = "35px" // default height
 	}
 
 	return swaggerConfig{
@@ -69,6 +76,7 @@ func (config Config) toSwaggerConfig() swaggerConfig {
 		IsDarkMode:            config.IsDarkMode,
 		CustomLogo:            config.CustomLogo,
 		LogoAspectRatio:       aspectRatio,
+		LogoHeight:            logoHeight,
 		CustomFavicon16:       config.CustomFavicon16,
 		CustomFavicon32:       config.CustomFavicon32,
 	}
@@ -92,6 +100,14 @@ func CustomLogo(logoBase64 string) func(*Config) {
 func LogoAspectRatio(ratio string) func(*Config) {
 	return func(c *Config) {
 		c.LogoAspectRatio = ratio
+	}
+}
+
+// LogoHeight sets the height of the custom logo (e.g., "40px", "50px", "3rem").
+// Default is "35px" if not specified. Width is calculated automatically based on aspect ratio.
+func LogoHeight(height string) func(*Config) {
+	return func(c *Config) {
+		c.LogoHeight = height
 	}
 }
 
@@ -175,6 +191,7 @@ func WrapHandler(handler *webdav.Handler, options ...func(*Config)) gin.HandlerF
 		IsDarkMode:               false,
 		CustomLogo:               "",
 		LogoAspectRatio:          "",
+		LogoHeight:               "",
 		CustomFavicon16:          "",
 		CustomFavicon32:          "",
 	}
@@ -356,7 +373,7 @@ body {
 .swagger-ui .topbar .link::before {
     content: "";
     display: block;
-    height: 35px;
+    height: {{.LogoHeight}};
     width: auto;
     aspect-ratio: {{.LogoAspectRatio}};
     background-image: url({{.CustomLogo}});
@@ -1290,7 +1307,7 @@ body {
     .swagger-ui .topbar .link::before {
         content: "";
         display: block;
-        height: 35px;
+        height: {{.LogoHeight}};
         width: auto;
         aspect-ratio: {{.LogoAspectRatio}};
         background-image: url({{.CustomLogo}});
