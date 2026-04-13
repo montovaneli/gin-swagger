@@ -1352,6 +1352,7 @@ window.onload = function() {
 
   let specData = null;
   let sortOrder = 'default';
+  const originalOrder = new Map();
 
   // Build a system
   const ui = SwaggerUIBundle({
@@ -1396,19 +1397,19 @@ window.onload = function() {
 	deepLinking: {{.DeepLinking}},
 	defaultModelsExpandDepth: {{.DefaultModelsExpandDepth}},
     onComplete: function() {
-      addCreatedAtStyles();
-      addSortButton();
+      injectStyles();
+      waitForOperationsAndInit();
     }
   })
 
   fetch("{{.URL}}")
-    .then(response => response.json())
-    .then(data => {
-      specData = data;
-    });
+    .then(function(r) { return r.json(); })
+    .then(function(data) { specData = data; });
 
-  function addCreatedAtStyles() {
+  function injectStyles() {
+    if (document.getElementById('created-at-styles')) return;
     const style = document.createElement('style');
+    style.id = 'created-at-styles';
     style.textContent = ` + "`" + `
       .opblock-summary-wrapper {
         display: flex;
@@ -1434,142 +1435,125 @@ window.onload = function() {
           background: rgba(156, 163, 175, 0.15);
         }
       }
-      .sort-by-date-btn {
-        background: #5892d5;
-        color: #fff;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        margin-left: 10px;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      }
-      .sort-by-date-btn:hover {
-        background: #4a7fc4;
-      }
       .sort-controls {
         display: flex;
         align-items: center;
-        margin-bottom: 10px;
-        padding: 10px 20px;
+        justify-content: flex-end;
+        padding: 8px 20px;
+        max-width: 1460px;
+        margin: 0 auto;
       }
       .sort-controls label {
         font-size: 13px;
         color: #6b7280;
-        margin-right: 5px;
+        margin-right: 8px;
       }
       @media (prefers-color-scheme: dark) {
-        .sort-controls label {
-          color: #9ca3af;
-        }
+        .sort-controls label { color: #9ca3af; }
       }
+      .sort-by-date-btn {
+        background: #6b7280;
+        color: #fff;
+        border: none;
+        padding: 5px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        transition: background 0.15s;
+      }
+      .sort-by-date-btn:hover { background: #4b5563; }
+      .sort-by-date-btn.active { background: #5892d5; }
+      .sort-by-date-btn.active:hover { background: #4a7fc4; }
     ` + "`" + `;
     document.head.appendChild(style);
   }
 
-  function addSortButton() {
-    const observer = new MutationObserver(function(mutations, obs) {
-      const infoContainer = document.querySelector('.swagger-ui .information-container');
-      if (infoContainer && !document.querySelector('.sort-controls')) {
-        const sortControls = document.createElement('div');
-        sortControls.className = 'sort-controls';
-        
-        const label = document.createElement('label');
-        label.textContent = 'Sort endpoints:';
-        
-        const btn = document.createElement('button');
-        btn.className = 'sort-by-date-btn';
-        btn.innerHTML = '↕ Default order';
-        btn.onclick = toggleSort;
-        
-        sortControls.appendChild(label);
-        sortControls.appendChild(btn);
-        
-        infoContainer.parentNode.insertBefore(sortControls, infoContainer.nextSibling);
+  function waitForOperationsAndInit() {
+    const check = setInterval(function() {
+      const schemeContainer = document.querySelector('.swagger-ui .scheme-container');
+      const opblocks = document.querySelectorAll('.swagger-ui .opblock');
+      if (schemeContainer && opblocks.length > 0 && !document.getElementById('sort-controls')) {
+        clearInterval(check);
+        snapshotOriginalOrder();
+        insertSortControls(schemeContainer);
       }
-    });
-    
-    observer.observe(document.body, { childList: true, subtree: true });
+    }, 200);
+    setTimeout(function() { clearInterval(check); }, 10000);
   }
 
-  function toggleSort() {
-    if (!specData || !specData.paths) return;
-    
-    const btn = document.querySelector('.sort-by-date-btn');
-    
+  function snapshotOriginalOrder() {
+    originalOrder.clear();
+    document.querySelectorAll('.opblock-tag-section').forEach(function(section, sIdx) {
+      const blocks = Array.from(section.querySelectorAll(':scope > .no-margin > .opblock, :scope > .opblock'));
+      originalOrder.set(sIdx, blocks.map(function(b) { return b; }));
+    });
+  }
+
+  function insertSortControls(anchor) {
+    const wrapper = document.createElement('div');
+    wrapper.id = 'sort-controls';
+    wrapper.className = 'sort-controls';
+
+    const label = document.createElement('label');
+    label.textContent = 'Sort by creation date:';
+
+    const btn = document.createElement('button');
+    btn.className = 'sort-by-date-btn';
+    btn.textContent = 'Newest first';
+    btn.onclick = function() { cycleSort(btn); };
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(btn);
+    anchor.parentNode.insertBefore(wrapper, anchor.nextSibling);
+  }
+
+  function cycleSort(btn) {
     if (sortOrder === 'default') {
       sortOrder = 'newest';
-      btn.innerHTML = '↓ Newest first';
-      sortOperations('newest');
+      btn.textContent = 'Newest first';
+      btn.classList.add('active');
+      applySort('newest');
     } else if (sortOrder === 'newest') {
       sortOrder = 'oldest';
-      btn.innerHTML = '↑ Oldest first';
-      sortOperations('oldest');
+      btn.textContent = 'Oldest first';
+      applySort('oldest');
     } else {
       sortOrder = 'default';
-      btn.innerHTML = '↕ Default order';
-      location.reload();
+      btn.textContent = 'Newest first';
+      btn.classList.remove('active');
+      restoreOriginalOrder();
     }
   }
 
-  function sortOperations(order) {
-    const operations = [];
-    
-    for (const path in specData.paths) {
-      for (const method in specData.paths[path]) {
-        if (['get', 'post', 'put', 'delete', 'patch', 'options', 'head'].includes(method)) {
-          const op = specData.paths[path][method];
-          operations.push({
-            path,
-            method,
-            createdAt: op['x-created-at'] || '1970-01-01',
-            tags: op.tags || ['default']
-          });
-        }
-      }
-    }
-    
-    operations.sort((a, b) => {
-      const dateA = new Date(a.createdAt);
-      const dateB = new Date(b.createdAt);
-      return order === 'newest' ? dateB - dateA : dateA - dateB;
-    });
-    
-    const tagSections = document.querySelectorAll('.opblock-tag-section');
-    tagSections.forEach(section => {
-      const opblocks = Array.from(section.querySelectorAll('.opblock'));
-      
-      opblocks.sort((a, b) => {
-        const pathA = a.querySelector('.opblock-summary-path')?.getAttribute('data-path') || 
-                      a.querySelector('.opblock-summary-path span')?.textContent || '';
-        const methodA = a.classList.contains('opblock-get') ? 'get' :
-                       a.classList.contains('opblock-post') ? 'post' :
-                       a.classList.contains('opblock-put') ? 'put' :
-                       a.classList.contains('opblock-delete') ? 'delete' :
-                       a.classList.contains('opblock-patch') ? 'patch' : '';
-        
-        const pathB = b.querySelector('.opblock-summary-path')?.getAttribute('data-path') || 
-                      b.querySelector('.opblock-summary-path span')?.textContent || '';
-        const methodB = b.classList.contains('opblock-get') ? 'get' :
-                       b.classList.contains('opblock-post') ? 'post' :
-                       b.classList.contains('opblock-put') ? 'put' :
-                       b.classList.contains('opblock-delete') ? 'delete' :
-                       b.classList.contains('opblock-patch') ? 'patch' : '';
-        
-        const opA = operations.find(op => pathA.includes(op.path) && op.method === methodA);
-        const opB = operations.find(op => pathB.includes(op.path) && op.method === methodB);
-        
-        const dateA = new Date(opA?.createdAt || '1970-01-01');
-        const dateB = new Date(opB?.createdAt || '1970-01-01');
-        
-        return order === 'newest' ? dateB - dateA : dateA - dateB;
-      });
-      
+  function getCreatedAt(blockEl) {
+    const badge = blockEl.querySelector('.opblock-created-at');
+    return badge ? badge.textContent.trim() : null;
+  }
+
+  function applySort(order) {
+    document.querySelectorAll('.opblock-tag-section').forEach(function(section) {
       const container = section.querySelector('.no-margin') || section;
-      opblocks.forEach(block => container.appendChild(block));
+      const blocks = Array.from(container.querySelectorAll(':scope > .opblock'));
+
+      blocks.sort(function(a, b) {
+        const dA = getCreatedAt(a) || '1970-01-01';
+        const dB = getCreatedAt(b) || '1970-01-01';
+        return order === 'newest'
+          ? (dB > dA ? 1 : dB < dA ? -1 : 0)
+          : (dA > dB ? 1 : dA < dB ? -1 : 0);
+      });
+
+      blocks.forEach(function(b) { container.appendChild(b); });
+    });
+  }
+
+  function restoreOriginalOrder() {
+    document.querySelectorAll('.opblock-tag-section').forEach(function(section, sIdx) {
+      const saved = originalOrder.get(sIdx);
+      if (!saved) return;
+      const container = section.querySelector('.no-margin') || section;
+      saved.forEach(function(b) { container.appendChild(b); });
     });
   }
 
