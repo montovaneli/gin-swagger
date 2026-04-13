@@ -1439,9 +1439,18 @@ window.onload = function() {
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        padding: 8px 20px;
-        max-width: 1460px;
-        margin: 0 auto;
+        padding: 10px 40px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: #fafafa;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+      }
+      @media (prefers-color-scheme: dark) {
+        .sort-controls {
+          background: #1f1f1f;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
       }
       .sort-controls label {
         font-size: 13px;
@@ -1471,13 +1480,12 @@ window.onload = function() {
 
   function waitForOperationsAndInit() {
     const check = setInterval(function() {
-      const wrapper = document.querySelector('.swagger-ui .wrapper');
-      const tagSections = document.querySelectorAll('.swagger-ui .opblock-tag-section');
-      if (wrapper && tagSections.length > 0 && !document.getElementById('sort-controls')) {
+      const firstTag = document.querySelector('.swagger-ui .opblock-tag');
+      if (firstTag && !document.getElementById('sort-controls')) {
         clearInterval(check);
-        insertSortControls(wrapper);
+        insertSortControls();
       }
-    }, 200);
+    }, 300);
     setTimeout(function() { clearInterval(check); }, 15000);
   }
 
@@ -1485,19 +1493,18 @@ window.onload = function() {
     if (originalOrder.size > 0) return;
     document.querySelectorAll('.opblock-tag-section').forEach(function(section, sIdx) {
       const container = section.querySelector('.no-margin') || section;
-      const blocks = Array.from(container.querySelectorAll(':scope > .opblock'));
+      const blocks = Array.from(container.children).filter(function(el) {
+        return el.classList.contains('opblock');
+      });
       if (blocks.length > 0) {
         originalOrder.set(sIdx, blocks.slice());
       }
     });
   }
 
-  function insertSortControls(wrapperEl) {
-    const col = wrapperEl.querySelector('.col-12');
-    if (!col) return;
-
-    const opsContainer = col.querySelector('.opblock-tag-section')?.parentNode;
-    if (!opsContainer) return;
+  function insertSortControls() {
+    const swaggerRoot = document.getElementById('swagger-ui');
+    if (!swaggerRoot) return;
 
     const controls = document.createElement('div');
     controls.id = 'sort-controls';
@@ -1513,7 +1520,8 @@ window.onload = function() {
 
     controls.appendChild(label);
     controls.appendChild(btn);
-    opsContainer.parentNode.insertBefore(controls, opsContainer);
+
+    swaggerRoot.insertBefore(controls, swaggerRoot.firstChild);
   }
 
   function cycleSort(btn) {
