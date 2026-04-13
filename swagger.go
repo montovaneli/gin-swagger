@@ -1434,7 +1434,7 @@ window.onload = function() {
           background: rgba(156, 163, 175, 0.15);
         }
       }
-      .sort-controls {
+      #sort-controls {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1470,14 +1470,21 @@ window.onload = function() {
 
   function waitForOperationsAndInit() {
     var check = setInterval(function() {
-      var scheme = document.querySelector('.swagger-ui .scheme-container');
       var firstTag = document.querySelector('.swagger-ui .opblock-tag');
-      if (scheme && firstTag && !document.getElementById('sort-controls')) {
+      if (firstTag) {
         clearInterval(check);
-        insertSortControls(scheme);
+        showSortControls();
       }
     }, 300);
     setTimeout(function() { clearInterval(check); }, 15000);
+  }
+
+  function showSortControls() {
+    var controls = document.getElementById('sort-controls');
+    var btn = document.getElementById('sort-btn');
+    if (!controls || !btn) return;
+    controls.style.display = '';
+    btn.onclick = function() { cycleSort(btn); };
   }
 
   function snapshotOriginalOrder() {
@@ -1491,25 +1498,6 @@ window.onload = function() {
         originalOrder.set(sIdx, blocks.slice());
       }
     });
-  }
-
-  function insertSortControls(schemeEl) {
-    var controls = document.createElement('div');
-    controls.id = 'sort-controls';
-    controls.className = 'sort-controls';
-
-    var label = document.createElement('label');
-    label.textContent = 'Sort by creation date:';
-
-    var btn = document.createElement('button');
-    btn.className = 'sort-by-date-btn';
-    btn.textContent = 'Newest first';
-    btn.onclick = function() { cycleSort(btn); };
-
-    controls.appendChild(label);
-    controls.appendChild(btn);
-
-    schemeEl.parentNode.insertBefore(controls, schemeEl.nextSibling);
   }
 
   function cycleSort(btn) {
@@ -1648,6 +1636,10 @@ const swaggerIndexTpl = `<!-- HTML for static distribution bundle build -->
 </svg>
 
 <div id="swagger-ui"></div>
+<div id="sort-controls" class="sort-controls" style="display:none">
+  <label>Sort by creation date:</label>
+  <button id="sort-btn" class="sort-by-date-btn">Newest first</button>
+</div>
 
 <script src="./swagger-ui-bundle.js"> </script>
 <script src="./swagger-ui-standalone-preset.js"> </script>
