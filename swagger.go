@@ -1471,29 +1471,37 @@ window.onload = function() {
 
   function waitForOperationsAndInit() {
     const check = setInterval(function() {
-      const schemeContainer = document.querySelector('.swagger-ui .scheme-container');
-      const opblocks = document.querySelectorAll('.swagger-ui .opblock');
-      if (schemeContainer && opblocks.length > 0 && !document.getElementById('sort-controls')) {
+      const wrapper = document.querySelector('.swagger-ui .wrapper');
+      const tagSections = document.querySelectorAll('.swagger-ui .opblock-tag-section');
+      if (wrapper && tagSections.length > 0 && !document.getElementById('sort-controls')) {
         clearInterval(check);
-        snapshotOriginalOrder();
-        insertSortControls(schemeContainer);
+        insertSortControls(wrapper);
       }
     }, 200);
-    setTimeout(function() { clearInterval(check); }, 10000);
+    setTimeout(function() { clearInterval(check); }, 15000);
   }
 
   function snapshotOriginalOrder() {
-    originalOrder.clear();
+    if (originalOrder.size > 0) return;
     document.querySelectorAll('.opblock-tag-section').forEach(function(section, sIdx) {
-      const blocks = Array.from(section.querySelectorAll(':scope > .no-margin > .opblock, :scope > .opblock'));
-      originalOrder.set(sIdx, blocks.map(function(b) { return b; }));
+      const container = section.querySelector('.no-margin') || section;
+      const blocks = Array.from(container.querySelectorAll(':scope > .opblock'));
+      if (blocks.length > 0) {
+        originalOrder.set(sIdx, blocks.slice());
+      }
     });
   }
 
-  function insertSortControls(anchor) {
-    const wrapper = document.createElement('div');
-    wrapper.id = 'sort-controls';
-    wrapper.className = 'sort-controls';
+  function insertSortControls(wrapperEl) {
+    const col = wrapperEl.querySelector('.col-12');
+    if (!col) return;
+
+    const opsContainer = col.querySelector('.opblock-tag-section')?.parentNode;
+    if (!opsContainer) return;
+
+    const controls = document.createElement('div');
+    controls.id = 'sort-controls';
+    controls.className = 'sort-controls';
 
     const label = document.createElement('label');
     label.textContent = 'Sort by creation date:';
@@ -1503,9 +1511,9 @@ window.onload = function() {
     btn.textContent = 'Newest first';
     btn.onclick = function() { cycleSort(btn); };
 
-    wrapper.appendChild(label);
-    wrapper.appendChild(btn);
-    anchor.parentNode.insertBefore(wrapper, anchor.nextSibling);
+    controls.appendChild(label);
+    controls.appendChild(btn);
+    opsContainer.parentNode.insertBefore(controls, opsContainer);
   }
 
   function cycleSort(btn) {
@@ -1532,6 +1540,7 @@ window.onload = function() {
   }
 
   function applySort(order) {
+    snapshotOriginalOrder();
     document.querySelectorAll('.opblock-tag-section').forEach(function(section) {
       const container = section.querySelector('.no-margin') || section;
       const blocks = Array.from(container.querySelectorAll(':scope > .opblock'));
