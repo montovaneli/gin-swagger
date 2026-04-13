@@ -1350,6 +1350,9 @@ window.onload = function() {
     }
   }
 
+  let specData = null;
+  let sortOrder = 'default';
+
   // Build a system
   const ui = SwaggerUIBundle({
     url: "{{.URL}}",
@@ -1362,13 +1365,213 @@ window.onload = function() {
       SwaggerUIStandalonePreset
     ],
     plugins: [
-      SwaggerUIBundle.plugins.DownloadUrl
+      SwaggerUIBundle.plugins.DownloadUrl,
+      function CreatedAtPlugin() {
+        return {
+          wrapComponents: {
+            OperationSummary: (Original, { React }) => (props) => {
+              const { specPath } = props;
+              const path = specPath.get(1);
+              const method = specPath.get(2);
+              
+              let createdAt = null;
+              if (specData && specData.paths && specData.paths[path] && specData.paths[path][method]) {
+                createdAt = specData.paths[path][method]['x-created-at'];
+              }
+              
+              return React.createElement('div', { className: 'opblock-summary-wrapper' },
+                React.createElement(Original, props),
+                createdAt ? React.createElement('span', {
+                  className: 'opblock-created-at',
+                  title: 'Created at'
+                }, createdAt) : null
+              );
+            }
+          }
+        };
+      }
     ],
 	layout: "StandaloneLayout",
     docExpansion: "{{.DocExpansion}}",
 	deepLinking: {{.DeepLinking}},
-	defaultModelsExpandDepth: {{.DefaultModelsExpandDepth}}
+	defaultModelsExpandDepth: {{.DefaultModelsExpandDepth}},
+    onComplete: function() {
+      addCreatedAtStyles();
+      addSortButton();
+    }
   })
+
+  fetch("{{.URL}}")
+    .then(response => response.json())
+    .then(data => {
+      specData = data;
+    });
+
+  function addCreatedAtStyles() {
+    const style = document.createElement('style');
+    style.textContent = ` + "`" + `
+      .opblock-summary-wrapper {
+        display: flex;
+        align-items: center;
+        width: 100%;
+      }
+      .opblock-summary-wrapper > .opblock-summary {
+        flex: 1;
+      }
+      .opblock-created-at {
+        font-size: 11px;
+        color: #6b7280;
+        background: rgba(107, 114, 128, 0.1);
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-right: 10px;
+        font-family: monospace;
+        white-space: nowrap;
+      }
+      @media (prefers-color-scheme: dark) {
+        .opblock-created-at {
+          color: #9ca3af;
+          background: rgba(156, 163, 175, 0.15);
+        }
+      }
+      .sort-by-date-btn {
+        background: #5892d5;
+        color: #fff;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        margin-left: 10px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .sort-by-date-btn:hover {
+        background: #4a7fc4;
+      }
+      .sort-controls {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+        padding: 10px 20px;
+      }
+      .sort-controls label {
+        font-size: 13px;
+        color: #6b7280;
+        margin-right: 5px;
+      }
+      @media (prefers-color-scheme: dark) {
+        .sort-controls label {
+          color: #9ca3af;
+        }
+      }
+    ` + "`" + `;
+    document.head.appendChild(style);
+  }
+
+  function addSortButton() {
+    const observer = new MutationObserver(function(mutations, obs) {
+      const infoContainer = document.querySelector('.swagger-ui .information-container');
+      if (infoContainer && !document.querySelector('.sort-controls')) {
+        const sortControls = document.createElement('div');
+        sortControls.className = 'sort-controls';
+        
+        const label = document.createElement('label');
+        label.textContent = 'Sort endpoints:';
+        
+        const btn = document.createElement('button');
+        btn.className = 'sort-by-date-btn';
+        btn.innerHTML = '↕ Default order';
+        btn.onclick = toggleSort;
+        
+        sortControls.appendChild(label);
+        sortControls.appendChild(btn);
+        
+        infoContainer.parentNode.insertBefore(sortControls, infoContainer.nextSibling);
+      }
+    });
+    
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function toggleSort() {
+    if (!specData || !specData.paths) return;
+    
+    const btn = document.querySelector('.sort-by-date-btn');
+    
+    if (sortOrder === 'default') {
+      sortOrder = 'newest';
+      btn.innerHTML = '↓ Newest first';
+      sortOperations('newest');
+    } else if (sortOrder === 'newest') {
+      sortOrder = 'oldest';
+      btn.innerHTML = '↑ Oldest first';
+      sortOperations('oldest');
+    } else {
+      sortOrder = 'default';
+      btn.innerHTML = '↕ Default order';
+      location.reload();
+    }
+  }
+
+  function sortOperations(order) {
+    const operations = [];
+    
+    for (const path in specData.paths) {
+      for (const method in specData.paths[path]) {
+        if (['get', 'post', 'put', 'delete', 'patch', 'options', 'head'].includes(method)) {
+          const op = specData.paths[path][method];
+          operations.push({
+            path,
+            method,
+            createdAt: op['x-created-at'] || '1970-01-01',
+            tags: op.tags || ['default']
+          });
+        }
+      }
+    }
+    
+    operations.sort((a, b) => {
+      const dateA = new Date(a.createdAt);
+      const dateB = new Date(b.createdAt);
+      return order === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+    
+    const tagSections = document.querySelectorAll('.opblock-tag-section');
+    tagSections.forEach(section => {
+      const opblocks = Array.from(section.querySelectorAll('.opblock'));
+      
+      opblocks.sort((a, b) => {
+        const pathA = a.querySelector('.opblock-summary-path')?.getAttribute('data-path') || 
+                      a.querySelector('.opblock-summary-path span')?.textContent || '';
+        const methodA = a.classList.contains('opblock-get') ? 'get' :
+                       a.classList.contains('opblock-post') ? 'post' :
+                       a.classList.contains('opblock-put') ? 'put' :
+                       a.classList.contains('opblock-delete') ? 'delete' :
+                       a.classList.contains('opblock-patch') ? 'patch' : '';
+        
+        const pathB = b.querySelector('.opblock-summary-path')?.getAttribute('data-path') || 
+                      b.querySelector('.opblock-summary-path span')?.textContent || '';
+        const methodB = b.classList.contains('opblock-get') ? 'get' :
+                       b.classList.contains('opblock-post') ? 'post' :
+                       b.classList.contains('opblock-put') ? 'put' :
+                       b.classList.contains('opblock-delete') ? 'delete' :
+                       b.classList.contains('opblock-patch') ? 'patch' : '';
+        
+        const opA = operations.find(op => pathA.includes(op.path) && op.method === methodA);
+        const opB = operations.find(op => pathB.includes(op.path) && op.method === methodB);
+        
+        const dateA = new Date(opA?.createdAt || '1970-01-01');
+        const dateB = new Date(opB?.createdAt || '1970-01-01');
+        
+        return order === 'newest' ? dateB - dateA : dateA - dateB;
+      });
+      
+      const container = section.querySelector('.no-margin') || section;
+      opblocks.forEach(block => container.appendChild(block));
+    });
+  }
 
   const defaultClientId = "{{.Oauth2DefaultClientID}}";
   if (defaultClientId) {
