@@ -1490,12 +1490,10 @@ window.onload = function() {
     var attempts = 0;
     var check = setInterval(function() {
       attempts++;
-      var opblocks = document.querySelectorAll('.swagger-ui .opblock');
-      if (opblocks.length > 0 || attempts > 40) {
+      var container = document.querySelector('.swagger-ui .operation-tag-content');
+      if (container || attempts > 60) {
         clearInterval(check);
-        if (opblocks.length > 0) {
-          setTimeout(function() { applySort('newest'); }, 300);
-        }
+        if (container) applySort('newest');
       }
     }, 250);
   }
@@ -1514,20 +1512,20 @@ window.onload = function() {
     }
   }
 
-  function getCreatedAt(opblock) {
-    var el = opblock.querySelector('[data-created-at]');
-    return el ? el.getAttribute('data-created-at') : '';
+  function getCreatedAt(el) {
+    var node = el.querySelector('[data-created-at]');
+    return node ? node.getAttribute('data-created-at') : '';
   }
 
   function applySort(order) {
     document.querySelectorAll('.opblock-tag-section').forEach(function(section) {
-      var container = section.querySelector('.no-margin') || section;
-      var blocks = Array.from(container.children).filter(function(el) {
-        return el.classList.contains('opblock');
-      });
-      if (blocks.length === 0) return;
+      var container = section.querySelector('.operation-tag-content');
+      if (!container) return;
 
-      blocks.sort(function(a, b) {
+      var items = Array.from(container.children);
+      if (items.length < 2) return;
+
+      items.sort(function(a, b) {
         var dA = getCreatedAt(a);
         var dB = getCreatedAt(b);
         if (!dA && !dB) return 0;
@@ -1538,7 +1536,7 @@ window.onload = function() {
           : (dA > dB ? 1 : dA < dB ? -1 : 0);
       });
 
-      blocks.forEach(function(b) { container.appendChild(b); });
+      items.forEach(function(el) { container.appendChild(el); });
     });
   }
 
