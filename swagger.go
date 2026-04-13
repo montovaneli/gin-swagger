@@ -1350,11 +1350,12 @@ window.onload = function() {
     }
   }
 
-  let sortOrder = 'default';
-  const originalOrder = new Map();
+  var sortOrder = 'default';
+  var originalOrder = new Map();
+  var controlsEl = document.getElementById('sort-controls');
+  var sortBtn = document.getElementById('sort-btn');
 
-  // Build a system
-  const ui = SwaggerUIBundle({
+  var ui = SwaggerUIBundle({
     url: "{{.URL}}",
     dom_id: '#swagger-ui',
     validatorUrl: null,
@@ -1374,15 +1375,18 @@ window.onload = function() {
                 var React = system.React;
                 var specJson = system.specSelectors.specJson();
                 var specPath = props.specPath;
-                var path = specPath.get(1);
+                var apiPath = specPath.get(1);
                 var method = specPath.get(2);
 
                 var createdAt = null;
                 try {
-                  createdAt = specJson.getIn(['paths', path, method, 'x-created-at']) || null;
+                  createdAt = specJson.getIn(['paths', apiPath, method, 'x-created-at']) || null;
                 } catch(e) {}
 
-                return React.createElement('div', { className: 'opblock-summary-wrapper' },
+                return React.createElement('div', {
+                  className: 'opblock-summary-wrapper',
+                  'data-created-at': createdAt || ''
+                },
                   React.createElement(Original, props),
                   createdAt ? React.createElement('span', {
                     className: 'opblock-created-at',
@@ -1401,13 +1405,13 @@ window.onload = function() {
 	defaultModelsExpandDepth: {{.DefaultModelsExpandDepth}},
     onComplete: function() {
       injectStyles();
-      waitForOperationsAndInit();
+      startPositionLoop();
     }
   })
 
   function injectStyles() {
     if (document.getElementById('created-at-styles')) return;
-    const style = document.createElement('style');
+    var style = document.createElement('style');
     style.id = 'created-at-styles';
     style.textContent = ` + "`" + `
       .opblock-summary-wrapper {
@@ -1438,17 +1442,15 @@ window.onload = function() {
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 12px 20px;
-        max-width: 1460px;
-        margin: 0 auto;
+        padding: 12px 0;
       }
-      .sort-controls label {
+      #sort-controls label {
         font-size: 13px;
         color: #6b7280;
         margin-right: 8px;
       }
       @media (prefers-color-scheme: dark) {
-        .sort-controls label { color: #9ca3af; }
+        #sort-controls label { color: #9ca3af; }
       }
       .sort-by-date-btn {
         background: #6b7280;
@@ -1468,23 +1470,17 @@ window.onload = function() {
     document.head.appendChild(style);
   }
 
-  function waitForOperationsAndInit() {
-    var check = setInterval(function() {
-      var firstTag = document.querySelector('.swagger-ui .opblock-tag');
-      if (firstTag) {
-        clearInterval(check);
-        showSortControls();
-      }
-    }, 300);
-    setTimeout(function() { clearInterval(check); }, 15000);
-  }
+  function startPositionLoop() {
+    sortBtn.onclick = function() { cycleSort(); };
 
-  function showSortControls() {
-    var controls = document.getElementById('sort-controls');
-    var btn = document.getElementById('sort-btn');
-    if (!controls || !btn) return;
-    controls.style.display = '';
-    btn.onclick = function() { cycleSort(btn); };
+    setInterval(function() {
+      var scheme = document.querySelector('.swagger-ui .scheme-container');
+      if (!scheme) return;
+      if (!document.body.contains(controlsEl) || scheme.nextElementSibling !== controlsEl) {
+        controlsEl.style.display = '';
+        scheme.parentNode.insertBefore(controlsEl, scheme.nextSibling);
+      }
+    }, 500);
   }
 
   function snapshotOriginalOrder() {
@@ -1500,47 +1496,30 @@ window.onload = function() {
     });
   }
 
-  function cycleSort(btn) {
+  function cycleSort() {
     if (sortOrder === 'default') {
       sortOrder = 'newest';
-      btn.textContent = 'Newest first';
-      btn.classList.add('active');
+      sortBtn.textContent = 'Newest first';
+      sortBtn.classList.add('active');
       applySort('newest');
     } else if (sortOrder === 'newest') {
       sortOrder = 'oldest';
-      btn.textContent = 'Oldest first';
+      sortBtn.textContent = 'Oldest first';
       applySort('oldest');
     } else {
       sortOrder = 'default';
-      btn.textContent = 'Newest first';
-      btn.classList.remove('active');
+      sortBtn.textContent = 'Newest first';
+      sortBtn.classList.remove('active');
       restoreOriginalOrder();
     }
   }
 
-  function getCreatedAtFromSpec(blockEl) {
-    try {
-      var spec = window.ui.specSelectors.specJson().toJS();
-      if (!spec || !spec.paths) return null;
-
-      var summaryPath = blockEl.querySelector('.opblock-summary-path, [data-path]');
-      if (!summaryPath) return null;
-      var pathText = (summaryPath.getAttribute('data-path') || summaryPath.textContent || '').trim();
-
-      var method = null;
-      var classes = blockEl.className;
-      var methods = ['get','post','put','delete','patch','head','options'];
-      for (var i = 0; i < methods.length; i++) {
-        if (classes.indexOf('opblock-' + methods[i]) !== -1) { method = methods[i]; break; }
-      }
-      if (!method || !pathText) return null;
-
-      for (var p in spec.paths) {
-        if (pathText.indexOf(p) !== -1 && spec.paths[p][method]) {
-          return spec.paths[p][method]['x-created-at'] || null;
-        }
-      }
-    } catch(e) {}
+  function getCreatedAt(opblock) {
+    var wrapper = opblock.querySelector('[data-created-at]');
+    if (wrapper) {
+      var val = wrapper.getAttribute('data-created-at');
+      if (val) return val;
+    }
     return null;
   }
 
@@ -1553,8 +1532,8 @@ window.onload = function() {
       });
 
       blocks.sort(function(a, b) {
-        var dA = getCreatedAtFromSpec(a) || '1970-01-01';
-        var dB = getCreatedAtFromSpec(b) || '1970-01-01';
+        var dA = getCreatedAt(a) || '1970-01-01';
+        var dB = getCreatedAt(b) || '1970-01-01';
         return order === 'newest'
           ? (dB > dA ? 1 : dB < dA ? -1 : 0)
           : (dA > dB ? 1 : dA < dB ? -1 : 0);
