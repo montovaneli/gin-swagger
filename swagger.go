@@ -1350,7 +1350,6 @@ window.onload = function() {
     }
   }
 
-  let specData = null;
   let sortOrder = 'default';
   const originalOrder = new Map();
 
@@ -1370,23 +1369,27 @@ window.onload = function() {
       function CreatedAtPlugin() {
         return {
           wrapComponents: {
-            OperationSummary: (Original, { React }) => (props) => {
-              const { specPath } = props;
-              const path = specPath.get(1);
-              const method = specPath.get(2);
-              
-              let createdAt = null;
-              if (specData && specData.paths && specData.paths[path] && specData.paths[path][method]) {
-                createdAt = specData.paths[path][method]['x-created-at'];
-              }
-              
-              return React.createElement('div', { className: 'opblock-summary-wrapper' },
-                React.createElement(Original, props),
-                createdAt ? React.createElement('span', {
-                  className: 'opblock-created-at',
-                  title: 'Created at'
-                }, createdAt) : null
-              );
+            OperationSummary: function(Original, system) {
+              return function(props) {
+                var React = system.React;
+                var specJson = system.specSelectors.specJson();
+                var specPath = props.specPath;
+                var path = specPath.get(1);
+                var method = specPath.get(2);
+
+                var createdAt = null;
+                try {
+                  createdAt = specJson.getIn(['paths', path, method, 'x-created-at']) || null;
+                } catch(e) {}
+
+                return React.createElement('div', { className: 'opblock-summary-wrapper' },
+                  React.createElement(Original, props),
+                  createdAt ? React.createElement('span', {
+                    className: 'opblock-created-at',
+                    title: 'Created at'
+                  }, createdAt) : null
+                );
+              };
             }
           }
         };
@@ -1401,10 +1404,6 @@ window.onload = function() {
       waitForOperationsAndInit();
     }
   })
-
-  fetch("{{.URL}}")
-    .then(function(r) { return r.json(); })
-    .then(function(data) { specData = data; });
 
   function injectStyles() {
     if (document.getElementById('created-at-styles')) return;
@@ -1438,19 +1437,10 @@ window.onload = function() {
       .sort-controls {
         display: flex;
         align-items: center;
-        justify-content: flex-end;
-        padding: 10px 40px;
-        position: sticky;
-        top: 0;
-        z-index: 100;
-        background: #fafafa;
-        border-bottom: 1px solid rgba(0,0,0,0.08);
-      }
-      @media (prefers-color-scheme: dark) {
-        .sort-controls {
-          background: #1f1f1f;
-          border-bottom: 1px solid rgba(255,255,255,0.08);
-        }
+        justify-content: center;
+        padding: 12px 20px;
+        max-width: 1460px;
+        margin: 0 auto;
       }
       .sort-controls label {
         font-size: 13px;
@@ -1479,11 +1469,12 @@ window.onload = function() {
   }
 
   function waitForOperationsAndInit() {
-    const check = setInterval(function() {
-      const firstTag = document.querySelector('.swagger-ui .opblock-tag');
-      if (firstTag && !document.getElementById('sort-controls')) {
+    var check = setInterval(function() {
+      var scheme = document.querySelector('.swagger-ui .scheme-container');
+      var firstTag = document.querySelector('.swagger-ui .opblock-tag');
+      if (scheme && firstTag && !document.getElementById('sort-controls')) {
         clearInterval(check);
-        insertSortControls();
+        insertSortControls(scheme);
       }
     }, 300);
     setTimeout(function() { clearInterval(check); }, 15000);
@@ -1492,8 +1483,8 @@ window.onload = function() {
   function snapshotOriginalOrder() {
     if (originalOrder.size > 0) return;
     document.querySelectorAll('.opblock-tag-section').forEach(function(section, sIdx) {
-      const container = section.querySelector('.no-margin') || section;
-      const blocks = Array.from(container.children).filter(function(el) {
+      var container = section.querySelector('.no-margin') || section;
+      var blocks = Array.from(container.children).filter(function(el) {
         return el.classList.contains('opblock');
       });
       if (blocks.length > 0) {
@@ -1502,18 +1493,15 @@ window.onload = function() {
     });
   }
 
-  function insertSortControls() {
-    const swaggerRoot = document.getElementById('swagger-ui');
-    if (!swaggerRoot) return;
-
-    const controls = document.createElement('div');
+  function insertSortControls(schemeEl) {
+    var controls = document.createElement('div');
     controls.id = 'sort-controls';
     controls.className = 'sort-controls';
 
-    const label = document.createElement('label');
+    var label = document.createElement('label');
     label.textContent = 'Sort by creation date:';
 
-    const btn = document.createElement('button');
+    var btn = document.createElement('button');
     btn.className = 'sort-by-date-btn';
     btn.textContent = 'Newest first';
     btn.onclick = function() { cycleSort(btn); };
@@ -1521,7 +1509,7 @@ window.onload = function() {
     controls.appendChild(label);
     controls.appendChild(btn);
 
-    swaggerRoot.insertBefore(controls, swaggerRoot.firstChild);
+    schemeEl.parentNode.insertBefore(controls, schemeEl.nextSibling);
   }
 
   function cycleSort(btn) {
@@ -1542,20 +1530,43 @@ window.onload = function() {
     }
   }
 
-  function getCreatedAt(blockEl) {
-    const badge = blockEl.querySelector('.opblock-created-at');
-    return badge ? badge.textContent.trim() : null;
+  function getCreatedAtFromSpec(blockEl) {
+    try {
+      var spec = window.ui.specSelectors.specJson().toJS();
+      if (!spec || !spec.paths) return null;
+
+      var summaryPath = blockEl.querySelector('.opblock-summary-path, [data-path]');
+      if (!summaryPath) return null;
+      var pathText = (summaryPath.getAttribute('data-path') || summaryPath.textContent || '').trim();
+
+      var method = null;
+      var classes = blockEl.className;
+      var methods = ['get','post','put','delete','patch','head','options'];
+      for (var i = 0; i < methods.length; i++) {
+        if (classes.indexOf('opblock-' + methods[i]) !== -1) { method = methods[i]; break; }
+      }
+      if (!method || !pathText) return null;
+
+      for (var p in spec.paths) {
+        if (pathText.indexOf(p) !== -1 && spec.paths[p][method]) {
+          return spec.paths[p][method]['x-created-at'] || null;
+        }
+      }
+    } catch(e) {}
+    return null;
   }
 
   function applySort(order) {
     snapshotOriginalOrder();
     document.querySelectorAll('.opblock-tag-section').forEach(function(section) {
-      const container = section.querySelector('.no-margin') || section;
-      const blocks = Array.from(container.querySelectorAll(':scope > .opblock'));
+      var container = section.querySelector('.no-margin') || section;
+      var blocks = Array.from(container.children).filter(function(el) {
+        return el.classList.contains('opblock');
+      });
 
       blocks.sort(function(a, b) {
-        const dA = getCreatedAt(a) || '1970-01-01';
-        const dB = getCreatedAt(b) || '1970-01-01';
+        var dA = getCreatedAtFromSpec(a) || '1970-01-01';
+        var dB = getCreatedAtFromSpec(b) || '1970-01-01';
         return order === 'newest'
           ? (dB > dA ? 1 : dB < dA ? -1 : 0)
           : (dA > dB ? 1 : dA < dB ? -1 : 0);
@@ -1567,9 +1578,9 @@ window.onload = function() {
 
   function restoreOriginalOrder() {
     document.querySelectorAll('.opblock-tag-section').forEach(function(section, sIdx) {
-      const saved = originalOrder.get(sIdx);
+      var saved = originalOrder.get(sIdx);
       if (!saved) return;
-      const container = section.querySelector('.no-margin') || section;
+      var container = section.querySelector('.no-margin') || section;
       saved.forEach(function(b) { container.appendChild(b); });
     });
   }
