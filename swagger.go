@@ -1350,9 +1350,7 @@ window.onload = function() {
     }
   }
 
-  var sortOrder = 'default';
-  var originalOrder = new Map();
-  var controlsEl = document.getElementById('sort-controls');
+  var sortOrder = 'newest';
   var sortBtn = document.getElementById('sort-btn');
 
   var ui = SwaggerUIBundle({
@@ -1405,7 +1403,8 @@ window.onload = function() {
 	defaultModelsExpandDepth: {{.DefaultModelsExpandDepth}},
     onComplete: function() {
       injectStyles();
-      startPositionLoop();
+      sortBtn.onclick = toggleSort;
+      waitForDataAndSort();
     }
   })
 
@@ -1439,15 +1438,31 @@ window.onload = function() {
         }
       }
       #sort-controls {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9999;
         display: flex;
         align-items: center;
-        justify-content: center;
-        padding: 12px 0;
+        gap: 8px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 8px 16px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      }
+      @media (prefers-color-scheme: dark) {
+        #sort-controls {
+          background: #2d2d33;
+          border-color: #404040;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
       }
       #sort-controls label {
         font-size: 13px;
         color: #6b7280;
-        margin-right: 8px;
+        white-space: nowrap;
       }
       @media (prefers-color-scheme: dark) {
         #sort-controls label { color: #9ca3af; }
@@ -1462,6 +1477,7 @@ window.onload = function() {
         font-size: 12px;
         font-weight: 500;
         transition: background 0.15s;
+        white-space: nowrap;
       }
       .sort-by-date-btn:hover { background: #4b5563; }
       .sort-by-date-btn.active { background: #5892d5; }
@@ -1470,85 +1486,59 @@ window.onload = function() {
     document.head.appendChild(style);
   }
 
-  function startPositionLoop() {
-    sortBtn.onclick = function() { cycleSort(); };
-
-    setInterval(function() {
-      var scheme = document.querySelector('.swagger-ui .scheme-container');
-      if (!scheme) return;
-      if (!document.body.contains(controlsEl) || scheme.nextElementSibling !== controlsEl) {
-        controlsEl.style.display = '';
-        scheme.parentNode.insertBefore(controlsEl, scheme.nextSibling);
+  function waitForDataAndSort() {
+    var attempts = 0;
+    var check = setInterval(function() {
+      attempts++;
+      var opblocks = document.querySelectorAll('.swagger-ui .opblock');
+      if (opblocks.length > 0 || attempts > 40) {
+        clearInterval(check);
+        if (opblocks.length > 0) {
+          setTimeout(function() { applySort('newest'); }, 300);
+        }
       }
-    }, 500);
+    }, 250);
   }
 
-  function snapshotOriginalOrder() {
-    if (originalOrder.size > 0) return;
-    document.querySelectorAll('.opblock-tag-section').forEach(function(section, sIdx) {
-      var container = section.querySelector('.no-margin') || section;
-      var blocks = Array.from(container.children).filter(function(el) {
-        return el.classList.contains('opblock');
-      });
-      if (blocks.length > 0) {
-        originalOrder.set(sIdx, blocks.slice());
-      }
-    });
-  }
-
-  function cycleSort() {
-    if (sortOrder === 'default') {
+  function toggleSort() {
+    if (sortOrder === 'newest') {
+      sortOrder = 'oldest';
+      sortBtn.textContent = 'Oldest first';
+      sortBtn.classList.remove('active');
+      applySort('oldest');
+    } else {
       sortOrder = 'newest';
       sortBtn.textContent = 'Newest first';
       sortBtn.classList.add('active');
       applySort('newest');
-    } else if (sortOrder === 'newest') {
-      sortOrder = 'oldest';
-      sortBtn.textContent = 'Oldest first';
-      applySort('oldest');
-    } else {
-      sortOrder = 'default';
-      sortBtn.textContent = 'Newest first';
-      sortBtn.classList.remove('active');
-      restoreOriginalOrder();
     }
   }
 
   function getCreatedAt(opblock) {
-    var wrapper = opblock.querySelector('[data-created-at]');
-    if (wrapper) {
-      var val = wrapper.getAttribute('data-created-at');
-      if (val) return val;
-    }
-    return null;
+    var el = opblock.querySelector('[data-created-at]');
+    return el ? el.getAttribute('data-created-at') : '';
   }
 
   function applySort(order) {
-    snapshotOriginalOrder();
     document.querySelectorAll('.opblock-tag-section').forEach(function(section) {
       var container = section.querySelector('.no-margin') || section;
       var blocks = Array.from(container.children).filter(function(el) {
         return el.classList.contains('opblock');
       });
+      if (blocks.length === 0) return;
 
       blocks.sort(function(a, b) {
-        var dA = getCreatedAt(a) || '1970-01-01';
-        var dB = getCreatedAt(b) || '1970-01-01';
+        var dA = getCreatedAt(a);
+        var dB = getCreatedAt(b);
+        if (!dA && !dB) return 0;
+        if (!dA) return 1;
+        if (!dB) return -1;
         return order === 'newest'
           ? (dB > dA ? 1 : dB < dA ? -1 : 0)
           : (dA > dB ? 1 : dA < dB ? -1 : 0);
       });
 
       blocks.forEach(function(b) { container.appendChild(b); });
-    });
-  }
-
-  function restoreOriginalOrder() {
-    document.querySelectorAll('.opblock-tag-section').forEach(function(section, sIdx) {
-      var saved = originalOrder.get(sIdx);
-      if (!saved) return;
-      var container = section.querySelector('.no-margin') || section;
-      saved.forEach(function(b) { container.appendChild(b); });
     });
   }
 
@@ -1615,9 +1605,9 @@ const swaggerIndexTpl = `<!-- HTML for static distribution bundle build -->
 </svg>
 
 <div id="swagger-ui"></div>
-<div id="sort-controls" class="sort-controls" style="display:none">
+<div id="sort-controls">
   <label>Sort by creation date:</label>
-  <button id="sort-btn" class="sort-by-date-btn">Newest first</button>
+  <button id="sort-btn" class="sort-by-date-btn active">Newest first</button>
 </div>
 
 <script src="./swagger-ui-bundle.js"> </script>
